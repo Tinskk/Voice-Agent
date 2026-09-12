@@ -89,3 +89,17 @@ to point real Vapi tools at.
 ## Notes & learnings
 
 - _(2026-09-11) Created._
+- _(2026-09-12) An order placed live didn't land in the Orders sheet with no
+  visible cause — turned out the code had zero retry logic around Sheets/
+  Calendar writes, so any single transient error (rate limit from rapid
+  back-to-back test calls, a brief network blip) failed the whole tool call
+  outright. Added `app/retry.py` (`with_retries`, 3 attempts with backoff)
+  around every Sheets/Calendar API call in `sheets_client.py` and
+  `calendar_client.py`. Separately found `app/calendar_client.py` uses
+  `ZoneInfo(BUSINESS_TIMEZONE)` for all reservation-availability math, which
+  throws `ZoneInfoNotFoundError` on any Python environment without the OS's
+  IANA timezone database — confirmed locally on Windows, and plausible on a
+  minimal Render Python image too. Added `tzdata` to both `requirements.txt`
+  and `app/requirements.txt` as a pure-Python fallback so this can't depend on
+  what the underlying OS happens to ship. If reservation availability checks
+  ever start failing outright, check for this exact error first.

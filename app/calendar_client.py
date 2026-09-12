@@ -18,6 +18,7 @@ from google.oauth2.service_account import Credentials
 from googleapiclient.discovery import build
 
 import config
+from retry import with_retries
 
 SCOPES = ["https://www.googleapis.com/auth/calendar"]
 
@@ -45,8 +46,8 @@ def _business_hours_for(date_obj) -> tuple[str, str] | None:
 
 
 def _busy_blocks(day_start: datetime, day_end: datetime) -> list[tuple[datetime, datetime]]:
-    freebusy = (
-        _service()
+    freebusy = with_retries(
+        lambda: _service()
         .freebusy()
         .query(
             body={
@@ -130,8 +131,13 @@ def create_event(
     if notes:
         description_lines.append(f"Notes: {notes}")
 
-    event = (
-        _service()
+    # Note: unlike a rejected request (429/5xx, safe to retry), a network
+    # timeout after Google already processed the insert could in principle
+    # create a duplicate event on retry. Accepted tradeoff for v1 — a rare
+    # duplicate calendar entry the owner can spot and delete is preferable to
+    # a reservation silently vanishing.
+    event = with_retries(
+        lambda: _service()
         .events()
         .insert(
             calendarId=config.GOOGLE_CALENDAR_ID,

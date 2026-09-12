@@ -21,6 +21,7 @@ import gspread
 from google.oauth2.service_account import Credentials
 
 import config
+from retry import with_retries
 
 SCOPES = ["https://www.googleapis.com/auth/spreadsheets"]
 
@@ -52,27 +53,25 @@ def append_order(
     delivery_zone: str | None,
     notes: str | None,
 ) -> dict:
-    worksheet = _spreadsheet().worksheet(config.ORDERS_SHEET_NAME)
     now = datetime.now(timezone.utc)
     order_id = f"ORD-{now.strftime('%Y%m%d%H%M%S')}-{_last4(phone)}"
-    worksheet.append_row(
-        [
-            order_id,
-            now.isoformat(),
-            call_id or "",
-            customer_name or "",
-            phone,
-            json.dumps(items),
-            subtotal,
-            delivery_fee,
-            total,
-            order_type,
-            delivery_address or "",
-            delivery_zone or "",
-            "Pending",
-            notes or "",
-        ]
-    )
+    row = [
+        order_id,
+        now.isoformat(),
+        call_id or "",
+        customer_name or "",
+        phone,
+        json.dumps(items),
+        subtotal,
+        delivery_fee,
+        total,
+        order_type,
+        delivery_address or "",
+        delivery_zone or "",
+        "Pending",
+        notes or "",
+    ]
+    with_retries(lambda: _spreadsheet().worksheet(config.ORDERS_SHEET_NAME).append_row(row))
     return {"order_id": order_id, "total": total, "status": "Pending"}
 
 
@@ -88,23 +87,21 @@ def append_lead(
     qualification_notes: str | None,
     follow_up_needed: bool,
 ) -> dict:
-    worksheet = _spreadsheet().worksheet(config.LEADS_SHEET_NAME)
     now = datetime.now(timezone.utc)
     lead_id = f"LEAD-{now.strftime('%Y%m%d%H%M%S')}-{_last4(phone)}"
-    worksheet.append_row(
-        [
-            lead_id,
-            now.isoformat(),
-            call_id or "",
-            name or "",
-            phone,
-            email or "",
-            lead_type,
-            interest,
-            qualified,
-            qualification_notes or "",
-            "Y" if follow_up_needed else "N",
-            "New",
-        ]
-    )
+    row = [
+        lead_id,
+        now.isoformat(),
+        call_id or "",
+        name or "",
+        phone,
+        email or "",
+        lead_type,
+        interest,
+        qualified,
+        qualification_notes or "",
+        "Y" if follow_up_needed else "N",
+        "New",
+    ]
+    with_retries(lambda: _spreadsheet().worksheet(config.LEADS_SHEET_NAME).append_row(row))
     return {"lead_id": lead_id}
