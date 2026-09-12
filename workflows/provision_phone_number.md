@@ -45,7 +45,8 @@ connects callers to the current Vapi assistant.
   existing number to the new Vapi number once it's live, which is fast and
   reversible. Ask the business owner which they want before assuming.
 - **Purchase fails / no numbers available for the requested area code:** retry
-  without `--area-code`, or try a nearby area code.
+  with a different area code — see the 2026-09-12 note below, `--area-code`
+  is effectively required now, not optional.
 - **Re-running accidentally buys a second number:** only happens if
   `VAPI_PHONE_NUMBER_ID` wasn't saved to `.env` after the first successful
   run — check the Vapi dashboard for duplicate numbers and delete the unused one.
@@ -53,3 +54,10 @@ connects callers to the current Vapi assistant.
 ## Notes & learnings
 
 - _(2026-09-11) Created._
+- _(2026-09-12) Vapi's `/phone-number` endpoint now rejects a request with no
+  `numberDesiredAreaCode` at all ("At least one of numberDesiredAreaCode,
+  sipUri must be provided") — `--area-code` is required in practice despite
+  the tool treating it as optional. Also, not every area code is available;
+  a rejected one comes back with a helpful `Hint: Try one of X, Y, Z` in the
+  error message — just retry with one of those. Got `+1 (502) 358-0204` this
+  way on the second attempt (415 and the default unspecified both failed).
