@@ -15,6 +15,7 @@ later runs update the same assistant instead of creating a new one.
 from __future__ import annotations
 
 from common import ROOT, emit, env, log, read_json, write_json
+from number_words import naira_words
 from sheets_common import MENU_SHEET_NAME, open_spreadsheet
 from vapi_common import patch, post
 
@@ -91,7 +92,10 @@ CUSTOM_TOOL_DEFS = [
             "type": "object",
             "properties": {
                 "customer_name": {"type": "string"},
-                "phone": {"type": "string"},
+                "phone": {
+                    "type": "string",
+                    "description": "Callback number. Optional — if the caller doesn't give one, the number they're calling from is used automatically.",
+                },
                 "items": {
                     "type": "array",
                     "items": {
@@ -108,7 +112,7 @@ CUSTOM_TOOL_DEFS = [
                 "delivery_address": {"type": "string"},
                 "notes": {"type": "string"},
             },
-            "required": ["items", "order_type", "phone"],
+            "required": ["items", "order_type"],
         },
     },
     {
@@ -140,10 +144,13 @@ CUSTOM_TOOL_DEFS = [
                 "duration_minutes": {"type": "integer"},
                 "party_size": {"type": "integer"},
                 "customer_name": {"type": "string"},
-                "phone": {"type": "string"},
+                "phone": {
+                    "type": "string",
+                    "description": "Callback number. Optional — if the caller doesn't give one, the number they're calling from is used automatically.",
+                },
                 "notes": {"type": "string"},
             },
-            "required": ["date", "time", "customer_name", "phone"],
+            "required": ["date", "time", "customer_name"],
         },
     },
     {
@@ -156,7 +163,10 @@ CUSTOM_TOOL_DEFS = [
             "type": "object",
             "properties": {
                 "name": {"type": "string"},
-                "phone": {"type": "string"},
+                "phone": {
+                    "type": "string",
+                    "description": "Callback number. Optional — if the caller doesn't give one, the number they're calling from is used automatically.",
+                },
                 "email": {"type": "string"},
                 "type": {"type": "string", "enum": ["Order", "Lead", "Reservation"]},
                 "interest": {"type": "string"},
@@ -164,7 +174,7 @@ CUSTOM_TOOL_DEFS = [
                 "qualification_notes": {"type": "string"},
                 "follow_up_needed": {"type": "boolean"},
             },
-            "required": ["phone", "interest", "type"],
+            "required": ["interest", "type"],
         },
     },
 ]
@@ -189,10 +199,18 @@ def render_menu_block() -> str:
         for item in items:
             name = item.get("Item", "")
             price = item.get("Price", "")
+            try:
+                price_words = naira_words(float(price))
+            except (TypeError, ValueError):
+                price_words = str(price)
             desc = str(item.get("Description") or "").strip()
             tags = str(item.get("Dietary Tags") or "").strip()
             pairing = str(item.get("Popular Pairing") or "").strip()
-            line = f"- {name} — {price}"
+            # Both forms are given deliberately: the numeral is what you pass
+            # as unit_price to calculate_order_total/create_order; the words
+            # are exactly what you should say out loud — say "SPOKEN" verbatim,
+            # never read the numeral's digits one at a time.
+            line = f"- {name} — {price} (SPOKEN: \"{price_words}\")"
             if desc:
                 line += f". {desc}"
             if tags:
@@ -282,6 +300,25 @@ def create_or_update_assistant(tool_ids: list[str], system_prompt: str) -> dict:
         },
         "voice": {"provider": VOICE_PROVIDER, "voiceId": VOICE_ID},
         "transcriber": {"provider": TRANSCRIBER_PROVIDER, "model": TRANSCRIBER_MODEL},
+        # Loosened from Vapi's defaults after real test calls showed the
+        # assistant jumping in before the caller finished a thought —
+        # especially noticeable with non-US speech pacing/pauses. Higher
+        # waitSeconds/onNoPunctuationSeconds means it waits longer for a real
+        # pause before responding, at the cost of a bit more latency.
+        "startSpeakingPlan": {
+            "waitSeconds": 0.8,
+            "smartEndpointingPlan": {"provider": "vapi"},
+            "transcriptionEndpointingPlan": {
+                "onPunctuationSeconds": 0.2,
+                "onNoPunctuationSeconds": 2.5,
+                "onNumberSeconds": 0.8,
+            },
+        },
+        "stopSpeakingPlan": {
+            "numWords": 2,
+            "voiceSeconds": 0.3,
+            "backoffSeconds": 1.0,
+        },
     }
 
     if assistant_id:

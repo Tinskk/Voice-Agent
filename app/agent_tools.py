@@ -42,7 +42,7 @@ def dispatch(name: str, tool_input: dict, call_ctx: dict) -> dict:
         delivery_address = tool_input.get("delivery_address")
         # Always recompute — never trust a total the model might state.
         totals = pricing.calculate(items=items, order_type=order_type, delivery_address=delivery_address)
-        return sheets_client.append_order(
+        result = sheets_client.append_order(
             call_id=call_id,
             customer_name=tool_input.get("customer_name"),
             phone=tool_input.get("phone") or caller_number or "",
@@ -55,6 +55,8 @@ def dispatch(name: str, tool_input: dict, call_ctx: dict) -> dict:
             delivery_zone=totals["zone_matched"],
             notes=tool_input.get("notes"),
         )
+        result["total_words"] = totals["total_words"]
+        return result
 
     if name == "check_calendar_availability":
         return calendar_client.get_free_slots(tool_input["date"], tool_input.get("party_size"))

@@ -16,6 +16,7 @@ guessing a fee.
 from __future__ import annotations
 
 import config
+from number_words import naira_words
 
 
 def line_total(qty: int, unit_price: float) -> float:
@@ -52,8 +53,11 @@ def calculate(items: list[dict], order_type: str, delivery_address: str | None =
 
     return {
         "subtotal": sub,
+        "subtotal_words": naira_words(sub),
         "delivery_fee": fee,
+        "delivery_fee_words": naira_words(fee),
         "total": total,
+        "total_words": naira_words(total),
         "zone_matched": zone_name,
         "zone_unmatched": zone_unmatched,
     }
